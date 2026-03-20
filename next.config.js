@@ -1,12 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'export',
+  distDir: 'dist',
+  basePath: process.env.NODE_ENV === 'production' ? '/englishmate' : '',
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-    ],
+    unoptimized: true,
   },
 }
 
