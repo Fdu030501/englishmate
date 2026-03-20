@@ -1,18 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-// 延迟创建 Supabase 客户端
-let supabase: ReturnType<typeof createClient> | null = null
-
-function getSupabase() {
-  if (!supabase && process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    )
-  }
-  return supabase
-}
+import { getDailyTasks, saveDailyTasks } from '@/lib/storage'
 
 interface DailyTask {
   id: string
@@ -21,7 +8,7 @@ interface DailyTask {
   description: string
   priority: 'high' | 'medium' | 'low'
   completed: boolean
-  duration: number // 预计时长（分钟）
+  duration: number
 }
 
 export async function GET(request: NextRequest) {
@@ -29,38 +16,24 @@ export async function GET(request: NextRequest) {
     // 获取今天的日期
     const today = new Date().toISOString().split('T')[0]
 
-    const supabaseClient = getSupabase()
+    // 从 LocalStorage 获取任务
+    const existingTask = getDailyTasks(today)
 
-    // 检查是否已有今日任务（仅当 Supabase 配置时）
-    if (supabaseClient) {
-      const { data: existingTask } = await supabaseClient
-        .from('daily_task')
-        .select('*')
-        .eq('date', today)
-        .single()
-
-      if (existingTask) {
-        return NextResponse.json({ tasks: (existingTask as any).tasks, date: today })
-      }
-
-      // 生成新任务
-      const tasks = await generateDailyTasks()
-
-      // 保存到数据库
-      await supabaseClient.from('daily_task').insert({
-        date: today,
-        tasks: tasks as any,
-        completed: false
-      } as any)
-
-      return NextResponse.json({ tasks, date: today })
+    if (existingTask) {
+      return NextResponse.json({ tasks: existingTask.tasks, date: today })
     }
 
-    // 无数据库时返回默认任务
-    return NextResponse.json({
-      tasks: getDefaultTasks(),
-      date: today
+    // 生成新任务
+    const tasks = await generateDailyTasks()
+
+    // 保存到 LocalStorage
+    saveDailyTasks(today, {
+      date: today,
+      tasks: tasks as any,
+      completed: false
     })
+
+    return NextResponse.json({ tasks, date: today })
   } catch (error) {
     console.error('Daily task generation error:', error)
     // 返回默认任务
@@ -123,7 +96,7 @@ async function generateDailyTasks(): Promise<DailyTask[]> {
     id: `encouragement-${Date.now()}`,
     type: 'encouragement',
     title: '今日鼓励',
-    description: '你已经很棒了！保持这个节奏继续加油 💪',
+    description: '你已经很棒了！保持这个节奏继续加油',
     priority: 'low',
     completed: false,
     duration: 1
